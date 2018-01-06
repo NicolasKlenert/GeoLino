@@ -38,50 +38,53 @@ class Sequencer(object):
         #I should be the minimal indexlist with full rank
         return I
 
-    # def _calculateTensor(A,s, repeatFirstScalar = True):
-    #     Am,An = A.shape
-    #     sn = len(s)
-    #     if repeatFirstScalar:
-    #         A = A.reshape((1,Am,An)) #add third dimension
-    #         s = s.reshape((sn,1,1)) #point vector to third axis (in python axis=0)
-    #         #we reduce the third axis of A (so axis=0) and the first axis of s (axis = 2)
-    #         axis = ([2],[0])
-    #     else: #makes no difference!
-    #         A = A.reshape((Am,1,An))
-    #         s= s.reshape((1,sn,1))
-    #         #just take the index of a 1
-    #         axis = ([2],[1])
-    #     #now multiply so we get an 3dim tensor
-    #     return np.tensordot(s,A,axes=axis)
-    #     #for repeating of tensors: look at np.tile and np.repeat
-    #     ALL unnecessary! Tensordot automatacly creates new dimensions if needed
+    def hasRank(A, k, tol = 0.01):
+        if A.size == 0:
+            return k == 0
+        if k > max(A.shape):
+            return False
+        return np.linalg.matrix_rank(A, tol) == k
 
-    def doubleDescriptionMethod(A, tol = 0.01):
+    def doubleDescriptionMethod(A, tol = 0.01, normalize = False, minimise = True):
         m, n = A.shape
         #get a fullrank indexlist
         I = Sequencer._getMinimunIndexList(A,tol)
         #important: V is different here then in the skript! it is transposed
         #therefore V is a Vector of the Vi
         V = np.negative(np.linalg.inv(A[I,:])).T
-        J = set(range(n)).difference_update(I)
+        J = set(range(m)).difference(I)
         while len(J) != 0:
             j = J.pop()
             a = A[j,:]  #j-th row
             #calcualte scalarproduct of a and vi (vi the columns of V)
             scalars = np.dot(V,a)
-            #TODO: delete all unnecessarty Vi
-            V1 = V[scalars <= 0] #all vi with si <= 0
+            V1 = V[scalars <= 0,:] #all vi with si <= 0
             #create V2: all si*vj-sj*vi with si > 0, sj < 0
-            Vneg = V[scalars < 0]
-            Vpos = V[scalars > 0]
+            Vneg = V[scalars < 0,:]
+            Vpos = V[scalars > 0,:]
             scalars_neg = scalars[scalars < 0]
             scalars_pos = scalars[scalars > 0]
             #calculate rightSummand (sj*vi)
             #at the end we want to slice the tensor (on the third axis; axis=0)
-            rightSummand = np.tensordot(Vpos,scalar_neg, axes=0).reshape((-1,v_n),order='F')
+            rightTensor = scalars_neg.reshape((len(scalars_neg),1,1))*Vpos
+            rightSummand = rightTensor.reshape((-1,n))
             #calculate leftSummand (si*vj)
-            leftSummand = np.tensordot(Vneg, scalar_pos, axes= 0).reshape((-1,v_n),order='C')
+            Vneg_m, Vneg_n = Vneg.shape
+            leftTensor = scalars_pos.reshape((1,len(scalars_pos),1))*Vneg.reshape((Vneg_m,1,Vneg_n))
+            leftSummand = leftTensor.reshape((-1,n))
             V2 = leftSummand - rightSummand
-            #TODO: delete all unnecessarty Vi
-            V = numpy.concatenate((V1,V2))
-        return V
+            if minimise:
+            #-----delete all unnecessarty Vi------------
+                Wneg = np.dot(Vneg, A.T)
+                Wpos = np.dot(Vpos, A.T)
+                Wpos = np.repeat(Wpos, len(scalars_neg), axis=0)
+                Wneg = np.tile(Wneg, (len(scalars_pos),1))
+                cond = np.logical_and(Wpos == 0, Wneg == 0)
+                #cond array is a boolean matrix corresponding to V2
+                indices = [np.nonzero(row)[0] for row in cond]
+                #test the rank of AJ
+                booleanList = np.array([Sequencer.hasRank(A[ind,:], n-2, tol) for ind in indices])
+                V2 = V2[booleanList]
+            #------end of extracting unnecessary vi-----------
+            V = np.concatenate((V1,V2))
+        return V.T
