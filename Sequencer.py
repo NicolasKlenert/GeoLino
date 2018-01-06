@@ -1,10 +1,18 @@
 import numpy as np
+import scipy.linalg as spl
 
 class Sequencer(object):
 
     def __init__(self, textfile):
         #read textfile out and populate the main variables
-        self.matrix = Sequencer._readTextFile(textfile)
+        self.M = Sequencer._readTextFile(textfile)
+        self.A, self.b = Sequencer._get_input(self.M)
+
+    def run():
+        self.L, self.U = Sequencer._lin_space(A)
+        self.V, self.W = Sequencer._use_DDM(self.A, self.L, self.U, self.b)
+        return (self.V, self.W)
+
 
     def _readTextFile(url):
         #outputs an numpy matrix
@@ -45,7 +53,7 @@ class Sequencer(object):
             return False
         return np.linalg.matrix_rank(A, tol) == k
 
-    def doubleDescriptionMethod(A, tol = 0.01, normalize = False, minimise = True):
+    def doubleDescriptionMethod(A, tol = 0.01, minimise = True):
         m, n = A.shape
         #get a fullrank indexlist
         I = Sequencer._getMinimunIndexList(A,tol)
@@ -88,3 +96,120 @@ class Sequencer(object):
             #------end of extracting unnecessary vi-----------
             V = np.concatenate((V1,V2))
         return V.T
+
+    def nullspace(A, atol=1e-13, rtol=0):
+    """Compute an approximate basis for the nullspace of A.
+
+    The algorithm used by this function is based on the singular value
+    decomposition of `A`.
+
+    Parameters
+    ----------
+    A : ndarray
+        A should be at most 2-D.  A 1-D array with length k will be treated
+        as a 2-D with shape (1, k)
+    atol : float
+        The absolute tolerance for a zero singular value.  Singular values
+        smaller than `atol` are considered to be zero.
+    rtol : float
+        The relative tolerance.  Singular values less than rtol*smax are
+        considered to be zero, where smax is the largest singular value.
+
+    If both `atol` and `rtol` are positive, the combined tolerance is the
+    maximum of the two; that is::
+        tol = max(atol, rtol * smax)
+    Singular values smaller than `tol` are considered to be zero.
+
+    Return value
+    ------------
+    ns : ndarray
+        If `A` is an array with shape (m, k), then `ns` will be an array
+        with shape (k, n), where n is the estimated dimension of the
+        nullspace of `A`.  The columns of `ns` are a basis for the
+        nullspace; each element in numpy.dot(A, ns) will be approximately
+        zero.
+    """
+
+    A = np.atleast_2d(A)
+    u, s, vh = np.linalg.svd(A)
+    tol = max(atol, rtol * s[0])
+    nnz = (s >= tol).sum()
+    ns = vh[nnz:].conj().T
+    return ns
+
+    def _lin_space(A):
+    	# compute linearity space L of the polyhedron P={x in R^n: Ax<=b}
+    	# L be s.t. for an ONB u_1, ..., u_k, ..., u_n of R^n L = lin{u_1, ..., u_k} and
+    	# U = [u_k+1, ..., u_n] with lin{u_k+1, ..., u_n} the orth. complement of L
+    	# be a_1, ..., a_m the rows of A, then the orth. complement of L is lin{a_1, ..., a_m}
+    	# TODO: suitable error tolerance, use floating point arithmetic
+    	m, n = A.shape
+    	L = Sequencer.nullspace(A, atol=1e-13, rtol=0)
+    	U = np.eye(n)
+    	# ONB only exists if L not zero, in case that L is zero nullspace(...) returns []
+    	if L.size > 0:
+    		L = spl.orth(L)
+    		U = spl.orth(np.transpose(A))
+    	else:
+    		L = np.zeros((n,n))
+    	return (L, U)
+
+    def _use_DDM(A, L, U, b):
+    	# ...
+    	m, n = A.shape
+    	k = L.shape[1] # dimension of linearity space L
+    	AU = np.dot(A,U)
+    	up = np.hstack(AU, -b)
+    	z = np.zeros(AU.shape[1])
+    	last = np.hstack((z,[-1]))
+    	M = np.vstack((up,last))
+    	# P head as in 4.11 is the positive hull of the rows of Phead
+    	Phead = Sequencer.doubleDescriptionMethod(M)
+        # note that DoubleDescriptionMethod delivered in the past a Matrix where the ROWS the desired vecctors
+        Phead = Phead.T
+    	numbvecs = Phead.shape[0]
+    	# V and W will contain the desired vectors as columns
+    	V = []
+    	W = []
+    	i = 0
+    	elem = Phead[i][n-k+1]
+    	# scale rows s.t. last elements are 1 (or 0 per construction)
+    	while elem != 0:
+    		v = Phead[i]
+    		if elem != 1:
+    			v = v / elem
+    		# get rid of last element which is 1
+    		v = np.delete(v, n-k+1)
+    		if i == 0:
+    			V = v
+    		else:
+    			V = np.vstack((V, v))
+    		i = i + 1
+    		elem = Phead[i][n-k+1]
+    	# in case that all last elements are 0, the polyhedron is empty
+    	if i != 0:
+    		for j in range (i, numbvecs):
+    			w = Phead[j]
+    			w = np.delete(w, n-k+1)
+    			if j == i:
+    				W = w
+    			else:
+    				W = np.vstack((W, w))
+    	return V, W
+
+    def _get_input(M):
+    	# not very smart, better do that when reading file
+    	# splits the matrix M (which was read from the text file) into A and b
+    	# b is needes as a column vector
+    	m, l = M.shape
+    	n = l - 1
+    	# create b
+    	b = np.empty((m, 1))
+    	for i in range (0, m):
+    		b[i] = M[i][l-1]
+    	# create A
+    	A = np.empty((m, n))
+    	for i in range (0, m):
+    		for j in range (0, n):
+    			A[i][j] = M[i][j]
+    	return A, b
