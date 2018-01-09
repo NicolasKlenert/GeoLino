@@ -8,12 +8,12 @@ class Sequencer(object):
         self.M = Sequencer._readTextFile(textfile)
         self.A, self.b = Sequencer._get_input(self.M)
 
-    def run():
-        self.L, self.U = Sequencer._lin_space(A)
+    def run(self):
+        self.L, self.U = Sequencer._lin_space(self.A)
         self.V, self.W = Sequencer._use_DDM(self.A, self.L, self.U, self.b)
         return (self.V, self.W)
 
-
+    @staticmethod
     def _readTextFile(url):
         #outputs an numpy matrix
         # the first index describes on which row, the second the columns
@@ -25,6 +25,7 @@ class Sequencer(object):
                 matrix[i] = [float(num) for num in content[i].rstrip().split(' ')]
         return matrix
 
+    @staticmethod
     def _getMinimunIndexList(A, tol = 0.01):
         #if rank of A is not n, throw error
         m, n = A.shape
@@ -46,13 +47,15 @@ class Sequencer(object):
         #I should be the minimal indexlist with full rank
         return I
 
+    @staticmethod
     def hasRank(A, k, tol = 0.01):
         if A.size == 0:
             return k == 0
         if k > max(A.shape):
             return False
         return np.linalg.matrix_rank(A, tol) == k
-
+        
+    @staticmethod
     def doubleDescriptionMethod(A, tol = 0.01, minimise = True):
         m, n = A.shape
         #get a fullrank indexlist
@@ -81,7 +84,7 @@ class Sequencer(object):
             leftTensor = scalars_pos.reshape((1,len(scalars_pos),1))*Vneg.reshape((Vneg_m,1,Vneg_n))
             leftSummand = leftTensor.reshape((-1,n))
             V2 = leftSummand - rightSummand
-            if minimise:
+            if minimise and V2.size > 0:
             #-----delete all unnecessarty Vi------------
                 Wneg = np.dot(Vneg, A.T)
                 Wpos = np.dot(Vpos, A.T)
@@ -97,46 +100,48 @@ class Sequencer(object):
             V = np.concatenate((V1,V2))
         return V.T
 
+    @staticmethod
     def nullspace(A, atol=1e-13, rtol=0):
-    """Compute an approximate basis for the nullspace of A.
+        """Compute an approximate basis for the nullspace of A.
+    
+        The algorithm used by this function is based on the singular value
+        decomposition of `A`.
+    
+        Parameters
+        ----------
+        A : ndarray
+            A should be at most 2-D.  A 1-D array with length k will be treated
+            as a 2-D with shape (1, k)
+        atol : float
+            The absolute tolerance for a zero singular value.  Singular values
+            smaller than `atol` are considered to be zero.
+        rtol : float
+            The relative tolerance.  Singular values less than rtol*smax are
+            considered to be zero, where smax is the largest singular value.
+    
+        If both `atol` and `rtol` are positive, the combined tolerance is the
+        maximum of the two; that is::
+            tol = max(atol, rtol * smax)
+        Singular values smaller than `tol` are considered to be zero.
+    
+        Return value
+        ------------
+        ns : ndarray
+            If `A` is an array with shape (m, k), then `ns` will be an array
+            with shape (k, n), where n is the estimated dimension of the
+            nullspace of `A`.  The columns of `ns` are a basis for the
+            nullspace; each element in numpy.dot(A, ns) will be approximately
+            zero.
+        """
+    
+        A = np.atleast_2d(A)
+        u, s, vh = np.linalg.svd(A)
+        tol = max(atol, rtol * s[0])
+        nnz = (s >= tol).sum()
+        ns = vh[nnz:].conj().T
+        return ns
 
-    The algorithm used by this function is based on the singular value
-    decomposition of `A`.
-
-    Parameters
-    ----------
-    A : ndarray
-        A should be at most 2-D.  A 1-D array with length k will be treated
-        as a 2-D with shape (1, k)
-    atol : float
-        The absolute tolerance for a zero singular value.  Singular values
-        smaller than `atol` are considered to be zero.
-    rtol : float
-        The relative tolerance.  Singular values less than rtol*smax are
-        considered to be zero, where smax is the largest singular value.
-
-    If both `atol` and `rtol` are positive, the combined tolerance is the
-    maximum of the two; that is::
-        tol = max(atol, rtol * smax)
-    Singular values smaller than `tol` are considered to be zero.
-
-    Return value
-    ------------
-    ns : ndarray
-        If `A` is an array with shape (m, k), then `ns` will be an array
-        with shape (k, n), where n is the estimated dimension of the
-        nullspace of `A`.  The columns of `ns` are a basis for the
-        nullspace; each element in numpy.dot(A, ns) will be approximately
-        zero.
-    """
-
-    A = np.atleast_2d(A)
-    u, s, vh = np.linalg.svd(A)
-    tol = max(atol, rtol * s[0])
-    nnz = (s >= tol).sum()
-    ns = vh[nnz:].conj().T
-    return ns
-
+    @staticmethod
     def _lin_space(A):
     	# compute linearity space L of the polyhedron P={x in R^n: Ax<=b}
     	# L be s.t. for an ONB u_1, ..., u_k, ..., u_n of R^n L = lin{u_1, ..., u_k} and
@@ -151,30 +156,39 @@ class Sequencer(object):
     		L = spl.orth(L)
     		U = spl.orth(np.transpose(A))
     	else:
-    		L = np.zeros((n,n))
+    		L = np.zeros((1,1))
     	return (L, U)
 
+    @staticmethod
     def _use_DDM(A, L, U, b):
-    	# ...
-    	m, n = A.shape
-    	k = L.shape[1] # dimension of linearity space L
-    	AU = np.dot(A,U)
-    	up = np.hstack(AU, -b)
-    	z = np.zeros(AU.shape[1])
-    	last = np.hstack((z,[-1]))
-    	M = np.vstack((up,last))
-    	# P head as in 4.11 is the positive hull of the rows of Phead
-    	Phead = Sequencer.doubleDescriptionMethod(M)
+        # ...
+        m, n = A.shape
+        print(L)
+        if np.array_equal(L,[[0]]):
+            k = 0
+        else:
+            k = L.shape[1] # dimension of linearity space L
+        AU = np.dot(A,U)
+        up = np.hstack((AU, -b))
+        z = np.zeros(AU.shape[1])
+        last = np.hstack((z,[-1]))
+        M = np.vstack((up,last))
+        # P head as in 4.11 is the positive hull of the rows of Phead
+        Phead = Sequencer.doubleDescriptionMethod(M)
         # note that DoubleDescriptionMethod delivered in the past a Matrix where the ROWS the desired vecctors
         Phead = Phead.T
-    	numbvecs = Phead.shape[0]
-    	# V and W will contain the desired vectors as columns
-    	V = []
-    	W = []
-    	i = 0
-    	elem = Phead[i][n-k+1]
-    	# scale rows s.t. last elements are 1 (or 0 per construction)
-    	while elem != 0:
+        numbvecs = Phead.shape[0]
+        # V and W will contain the desired vectors as columns
+        V = []
+        W = []
+        i = 0
+        print n
+        print k
+        print Phead
+        elem = Phead[i][n-k]
+        # scale rows s.t. last elements are 1 (or 0 per construction)
+        print elem
+        while elem != 0:
     		v = Phead[i]
     		if elem != 1:
     			v = v / elem
@@ -185,18 +199,18 @@ class Sequencer(object):
     		else:
     			V = np.vstack((V, v))
     		i = i + 1
-    		elem = Phead[i][n-k+1]
-    	# in case that all last elements are 0, the polyhedron is empty
-    	if i != 0:
-    		for j in range (i, numbvecs):
-    			w = Phead[j]
-    			w = np.delete(w, n-k+1)
-    			if j == i:
-    				W = w
-    			else:
-    				W = np.vstack((W, w))
-    	return V, W
+    		  # in case that all last elements are 0, the polyhedron is empty
+        if i != 0:
+          for j in range (i, numbvecs):
+              w = Phead[j]
+              w = np.delete(w, n-k+1)
+              if j == i:
+                  W = w
+              else:
+                 W = np.vstack((W, w))
+    	return V.T, W.T
 
+    @staticmethod
     def _get_input(M):
     	# not very smart, better do that when reading file
     	# splits the matrix M (which was read from the text file) into A and b

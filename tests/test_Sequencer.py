@@ -1,4 +1,4 @@
-import Sequencer as Se
+from .. import Sequencer as Se
 import numpy as np
 
 def test_matrix_construction():
@@ -19,4 +19,8 @@ def test_doubleDescriptionMethod():
     assert np.array_equal(Se.Sequencer.doubleDescriptionMethod(A,minimise=True),[[0,1,0,3],[1,1,1,2],[0,0,2,1]])
 
 def test_Sequencer():
-    #TODO: write some tests here (just load the sequencer with the textfile and let it run)
+    filepath = 'tests/cube.poly'
+    seq = Se.Sequencer(filepath)
+    V, W = seq.run()
+    assert W.size == 0
+    assert np.array_equal(V,[[]])
