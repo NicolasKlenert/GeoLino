@@ -1,6 +1,9 @@
 from .. import Sequencer as Se
 import numpy as np
 
+def sameProducers(A,B):
+    return np.allclose(Se.Sequencer.normalize(A),Se.Sequencer.normalize(B))
+
 def test_matrix_construction():
     filepath = 'tests/text.txt'
     matrix = Se.Sequencer._readTextFile(filepath)
@@ -11,12 +14,23 @@ def test_indexlist():
     arr = np.array([[1,0,0],[0,1,0],[1,1,0],[0,0,1]])
     assert Se.Sequencer._getMinimunIndexList(arr) == [0,1,3]
 
-def test_doubleDescriptionMethod_1():
+def test_normalize_Rows():
+    A = np.array([[0,1,3],[0,3,3],[-3,-3,-4]])
+    B = np.array([[0,1,3],[0,1,1],[-1,-1,-1.3333333]])
+    assert np.allclose(Se.Sequencer.normalize(A,axis=1),B)
+
+def test_DDM_1():
     A1 = np.negative(np.eye(3))
     A2 = np.array([[1,-1,-1],[1,-2,1]])
     A = np.concatenate((A1,A2),axis=0)
-    assert np.array_equal(Se.Sequencer.doubleDescriptionMethod(A,minimise=False),[[0,1,0,2,1,3],[1,1,1,2,1,2],[0,0,2,2,1,1]])
-    assert np.array_equal(Se.Sequencer.doubleDescriptionMethod(A,minimise=True),[[0,1,0,3],[1,1,1,2],[0,0,2,1]])
+    B1 = np.array([[0,1,0,2,1,3],[1,1,1,2,1,2],[0,0,2,2,1,1]])
+    B2 = np.array([[0,1,0,3],[1,1,1,2],[0,0,2,1]])
+    V1 = Se.Sequencer.doubleDescriptionMethod(A,minimise=False)
+    V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise=True)
+    assert sameProducers(V1,B1)
+    assert sameProducers(V2,B2)
+    #assert np.array_equal(Se.Sequencer.doubleDescriptionMethod(A,minimise=False),[[0,1,0,2,1,3],[1,1,1,2,1,2],[0,0,2,2,1,1]])
+    #assert np.array_equal(Se.Sequencer.doubleDescriptionMethod(A,minimise=True),[[0,1,0,3],[1,1,1,2],[0,0,2,1]])
 
 def test_DDM_2():
     A = np.array([[1,1,1,1],[2,1,1,1],[1,2,1,1],[2,2,3,1],[1,1,5,1]])
@@ -24,6 +38,7 @@ def test_DDM_2():
     B2 = np.array([])#look at B2
     V1 = Se.Sequencer.doubleDescriptionMethod(A,minimise= False)
     V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise= True)
+    print(V1)
     assert np.allclose(V1,B1) #the arrays are not 100% equal because of floit point aritmetic
 
 def test_DDM_3():
@@ -34,6 +49,7 @@ def test_DDM_3():
     #the thing is, that we get a whole different solution with I=[0,1,2,4] (normal start index)
     V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise= False)
     assert np.array_equal(V1,B1) #the arrays are not 100% equal because of floit point aritmetic
+    #assert np.array_equal(V2,B1) -> same Producers no matter of start index, if minimise is on!
 
 def test_Sequencer_Cube():
     filepath = 'tests/cube.poly'

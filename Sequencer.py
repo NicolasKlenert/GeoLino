@@ -57,7 +57,24 @@ class Sequencer(object):
 		return np.linalg.matrix_rank(A, tol) == k
 
 	@staticmethod
-	def doubleDescriptionMethod(A, tol = 0.01, minimise = True, I = False):
+	def normalize(A, axis=0):
+		#get the min of every row (by axis=1)
+		print(A)
+		mask = np.ma.masked_equal(np.abs(A),0.0,copy=False)
+		minimas = np.min(mask, axis=axis)
+		print(minimas)
+		scalar = np.divide(np.ones_like(minimas,dtype=float),minimas, out=np.zeros_like(minimas,dtype=float), where= minimas!=0)
+		print(scalar)
+		if axis == 1:
+			scalar = scalar.reshape((-1, 1))
+		elif axis == 0:
+			scalar = scalar.reshape((1, -1))
+		tmp = np.repeat(scalar,A.shape[axis],axis=axis)
+		print(tmp)
+		return np.multiply(tmp,A)
+
+	@staticmethod
+	def doubleDescriptionMethod(A, tol = 0.001, normalize = False ,minimise = True, I = False):
 		m, n = A.shape
 		#get a fullrank indexlist
 		if not I:
@@ -102,7 +119,13 @@ class Sequencer(object):
 				V2 = V2[booleanList]
 			#------end of extracting unnecessary vi-----------
 			V = np.concatenate((V1,V2))
-			print(V)
+			#print(V)
+		if normalize:
+			#round before normalizing
+			V[np.abs(V) < tol] = 0
+			#normalize the first V, so there are less arithmetic mistakes?
+			#at least the vectors are uniq. determined
+			V = Sequencer.normalize(V, axis=1)
 		return V.T
 
 	@staticmethod
