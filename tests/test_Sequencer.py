@@ -2,7 +2,32 @@ from .. import Sequencer as Se
 import numpy as np
 
 def sameProducers(A,B):
-    return np.allclose(Se.Sequencer.normalize(A),Se.Sequencer.normalize(B))
+    if not A.shape == B.shape:
+        return False
+    A = Se.Sequencer.normalize(A)
+    B = Se.Sequencer.normalize(B)
+    if np.allclose(A,B):
+        return True
+    listA = [row for row in A.T]
+    listB = [row for row in B.T]
+    for colA in listA:
+        for idx,colB in enumerate(listB):
+            if np.allclose(colA, colB):
+                del listB[idx]
+                break
+    return not bool(listB)
+
+def test_sameProducers():
+    A =  np.arange(1,10).reshape((3,3))
+    B = np.array([[1,1,1],[4,2.5,2],[7,4,3]])
+    C = np.array([[4,2.5,2],[7,4,3],[1,1,1]])
+    D = np.array([[1,1,1],[2.5,2,4],[4,3,7]])
+    assert sameProducers(A,B)
+    assert not sameProducers(A,C)
+    assert sameProducers(A,D)
+    E = np.array([[0,1,1,6],[0,1,4,6],[1,1,1,0],[0,1,1,3]])
+    F = np.array([[1/3.0,1/3.0,2,0],[4/3.0,1/3.0,2,0],[1/3.0,1/3.0,0,1],[1/3.0,1/3.0,1,0]])
+    assert sameProducers(F,E)
 
 def test_matrix_construction():
     filepath = 'tests/text.txt'
@@ -38,7 +63,7 @@ def test_DDM_2():
     B2 = np.array([])#look at B2
     V1 = Se.Sequencer.doubleDescriptionMethod(A,minimise= False)
     V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise= True)
-    print(V1)
+    #print(V1)
     assert np.allclose(V1,B1) #the arrays are not 100% equal because of floit point aritmetic
 
 def test_DDM_3():
@@ -47,9 +72,11 @@ def test_DDM_3():
     B2 = np.array([[0,1,1,4,2],[0,1,4,1,2],[1,1,1,1,0],[0,1,1,1,1]])
     V1 = Se.Sequencer.doubleDescriptionMethod(A,minimise= False, I=[0,1,2,6])
     #the thing is, that we get a whole different solution with I=[0,1,2,4] (normal start index)
-    V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise= False)
+    V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise=True, I=[0,1,2,6])
+    V3 = Se.Sequencer.doubleDescriptionMethod(A,minimise=True)
     assert np.array_equal(V1,B1) #the arrays are not 100% equal because of floit point aritmetic
-    #assert np.array_equal(V2,B1) -> same Producers no matter of start index, if minimise is on!
+    assert sameProducers(V2,V3)
+    assert sameProducers(V2,B2) #-> same Producers no matter of start index, if minimise is on!
 
 def test_Sequencer_Cube():
     filepath = 'tests/cube.poly'

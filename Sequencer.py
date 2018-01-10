@@ -11,7 +11,9 @@ class Sequencer(object):
 	def run(self):
 		self.k, self.U = Sequencer.linSpace(self.A)
 		self.M = Sequencer.buildM(self.A, self.U, self.b)
-		self.V, self.W = Sequencer.useDDM(self.M, self.k)
+		self.n = self.A.shape[1]
+		self.Phat = Sequencer.doubleDescriptionMethod(self.M)
+		self.V, self.W = Sequencer.useDDM(self.Phat ,self.n, self.k)
 		return (self.V, self.W)
 
 	@staticmethod
@@ -59,18 +61,18 @@ class Sequencer(object):
 	@staticmethod
 	def normalize(A, axis=0):
 		#get the min of every row (by axis=1)
-		print(A)
+		#print(A)
 		mask = np.ma.masked_equal(np.abs(A),0.0,copy=False)
 		minimas = np.min(mask, axis=axis)
-		print(minimas)
+		#print(minimas)
 		scalar = np.divide(np.ones_like(minimas,dtype=float),minimas, out=np.zeros_like(minimas,dtype=float), where= minimas!=0)
-		print(scalar)
+		#print(scalar)
 		if axis == 1:
 			scalar = scalar.reshape((-1, 1))
 		elif axis == 0:
 			scalar = scalar.reshape((1, -1))
 		tmp = np.repeat(scalar,A.shape[axis],axis=axis)
-		print(tmp)
+		#print(tmp)
 		return np.multiply(tmp,A)
 
 	@staticmethod
@@ -82,6 +84,7 @@ class Sequencer(object):
 		#important: V is different here then in the skript! it is transposed
 		#therefore V is a Vector of the Vi
 		V = np.negative(np.linalg.inv(A[I,:])).T
+		#print(Sequencer.normalize(V, axis=1))
 		J = set(range(m)).difference(I)
 		while len(J) != 0:
 			j = J.pop()
@@ -109,17 +112,38 @@ class Sequencer(object):
 			#-----delete all unnecessarty Vi------------
 				Wneg = np.dot(Vneg, A.T)
 				Wpos = np.dot(Vpos, A.T)
-				Wpos = np.repeat(Wpos, len(scalars_neg), axis=0)
-				Wneg = np.tile(Wneg, (len(scalars_pos),1))
+				Wneg[np.abs(Wneg) < tol] = 0
+				Wpos[np.abs(Wpos) < tol] = 0
+				Wneg = np.repeat(Wneg, len(scalars_pos), axis=0)
+				Wpos = np.tile(Wpos, (len(scalars_neg),1))
+				#print(Wpos)
+				#print(Wneg)
+				#print (Sequencer.normalize(Vpos, axis=1).T)
+				#print (Sequencer.normalize(Vneg, axis=1).T)
+				#print("=======================================")
 				cond = np.logical_and(Wpos == 0, Wneg == 0)
+				#print(cond)
+				print(Sequencer.normalize(V, axis=1).T)
+				#print(Sequencer.normalize(V2, axis=1).T)
 				#cond array is a boolean matrix corresponding to V2
 				indices = [np.nonzero(row)[0] for row in cond]
 				#test the rank of AJ
+				#d = np.linalg.matrix_rank(A[I,:], tol)
 				booleanList = np.array([Sequencer.hasRank(A[ind,:], n-2, tol) for ind in indices])
 				V2 = V2[booleanList]
+				#delete all vectors we already have
+				#print(Sequencer.normalize(V2, axis=1).T)
+				U = np.tile(V,(V2.shape[0],1,1))
+				U2 = V2.reshape(V2.shape[0],1,V2.shape[1])
+				uniqueList = np.equal(U,U2).all(axis=2).any(axis=1)
+				#print(uniqueList)
+				V2 = V2[np.invert(uniqueList)]
+				#print(Sequencer.normalize(V2, axis=1).T)
 			#------end of extracting unnecessary vi-----------
 			V = np.concatenate((V1,V2))
-			#print(V)
+			I.append(j)
+			#print(Sequencer.normalize(V, axis=1).T)
+			print("=========================="+str(len(J))+"================")
 		if normalize:
 			#round before normalizing
 			V[np.abs(V) < tol] = 0
@@ -196,10 +220,8 @@ class Sequencer(object):
 		return M
 
 	@staticmethod
-	def useDDM(M,k):
-		n = M.shape[1]-1
+	def useDDM(Phat,n,k):
 		# P hat as in 4.11 is the positive hull of the rows of Phat
-		Phat = Sequencer.doubleDescriptionMethod(M, minimise=True)
 		Pm, Pn = Phat.shape
 		lrow = Phat[Pm-1]
 		#print lrow.shape
@@ -207,7 +229,7 @@ class Sequencer(object):
 		#print nonzero.shape
 		scale = 1 / lrow[nonzero]
 		#print scale.shape
-		print(Phat)
+		#print(Phat)
 		nonzero = np.reshape(nonzero, (1,-1))
 		nonzero_matrix = np.repeat(nonzero, Pm, axis=0)
 		tmp = np.reshape(Phat[nonzero_matrix],(-1,np.sum(nonzero)))
@@ -215,8 +237,8 @@ class Sequencer(object):
 		V = np.multiply(tmp, scale)
 		zero_matrix = np.ones(nonzero_matrix.shape, "bool") - nonzero_matrix
 		W = np.reshape(Phat[zero_matrix], (Pm, -1))
-		print(V)
-		print(W)
+		#print(V)
+		#print(W)
 		#V = V[]
 		V = np.delete(V, n-k, 0)
 		W = np.delete(W,n-k, 0)
