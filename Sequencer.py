@@ -59,7 +59,9 @@ class Sequencer(object):
 		return np.linalg.matrix_rank(A, tol) == k
 
 	@staticmethod
-	def normalize(A, axis=0):
+	def normalize(A, axis=0, round='toZero', tol = 0.001):
+		if round == 'toZero':
+			A[np.abs(A) < tol] = 0
 		#get the min of every row (by axis=1)
 		#print(A)
 		mask = np.ma.masked_equal(np.abs(A),0.0,copy=False)
@@ -73,10 +75,13 @@ class Sequencer(object):
 			scalar = scalar.reshape((1, -1))
 		tmp = np.repeat(scalar,A.shape[axis],axis=axis)
 		#print(tmp)
-		return np.multiply(tmp,A)
+		result = np.multiply(tmp,A)
+		if round == 'toZero':
+			result[np.abs(result) < tol] = 0
+		return result
 
 	@staticmethod
-	def doubleDescriptionMethod(A, tol = 0.001, normalize = False ,minimise = True, I = False):
+	def doubleDescriptionMethod(A, tol = 0.001, minimise = True, I = False):
 		m, n = A.shape
 		#get a fullrank indexlist
 		if not I:
@@ -84,13 +89,20 @@ class Sequencer(object):
 		#important: V is different here then in the skript! it is transposed
 		#therefore V is a Vector of the Vi
 		V = np.negative(np.linalg.inv(A[I,:])).T
-		#print(Sequencer.normalize(V, axis=1))
+
+		if minimise:
+			#round before and after normalizing
+			V = Sequencer.normalize(V, axis=1, round='toZero', tol = tol)
+
 		J = set(range(m)).difference(I)
 		while len(J) != 0:
+			#print(V.T)
+			#print("=========================="+str(len(J))+"================")
 			j = J.pop()
 			a = A[j,:]  #j-th row
 			#calcualte scalarproduct of a and vi (vi the columns of V)
 			scalars = np.dot(V,a)
+			scalars[np.abs(scalars) < tol] = 0
 			V1 = V[scalars <= 0,:] #all vi with si <= 0
 			#create V2: all si*vj-sj*vi with si > 0, sj < 0
 			Vneg = V[scalars < 0,:]
@@ -116,15 +128,8 @@ class Sequencer(object):
 				Wpos[np.abs(Wpos) < tol] = 0
 				Wneg = np.repeat(Wneg, len(scalars_pos), axis=0)
 				Wpos = np.tile(Wpos, (len(scalars_neg),1))
-				#print(Wpos)
-				#print(Wneg)
-				#print (Sequencer.normalize(Vpos, axis=1).T)
-				#print (Sequencer.normalize(Vneg, axis=1).T)
-				#print("=======================================")
+
 				cond = np.logical_and(Wpos == 0, Wneg == 0)
-				#print(cond)
-				print(Sequencer.normalize(V, axis=1).T)
-				#print(Sequencer.normalize(V2, axis=1).T)
 				#cond array is a boolean matrix corresponding to V2
 				indices = [np.nonzero(row)[0] for row in cond]
 				#test the rank of AJ
@@ -132,24 +137,16 @@ class Sequencer(object):
 				booleanList = np.array([Sequencer.hasRank(A[ind,:], n-2, tol) for ind in indices])
 				V2 = V2[booleanList]
 				#delete all vectors we already have
-				#print(Sequencer.normalize(V2, axis=1).T)
+				V2 = Sequencer.normalize(V2, axis=1, round='toZero', tol = tol)
 				U = np.tile(V,(V2.shape[0],1,1))
 				U2 = V2.reshape(V2.shape[0],1,V2.shape[1])
 				uniqueList = np.equal(U,U2).all(axis=2).any(axis=1)
-				#print(uniqueList)
 				V2 = V2[np.invert(uniqueList)]
-				#print(Sequencer.normalize(V2, axis=1).T)
 			#------end of extracting unnecessary vi-----------
 			V = np.concatenate((V1,V2))
 			I.append(j)
-			#print(Sequencer.normalize(V, axis=1).T)
-			print("=========================="+str(len(J))+"================")
-		if normalize:
-			#round before normalizing
-			V[np.abs(V) < tol] = 0
-			#normalize the first V, so there are less arithmetic mistakes?
-			#at least the vectors are uniq. determined
-			V = Sequencer.normalize(V, axis=1)
+		#print(V.T)
+		#print("=========================="+str(len(J))+"================")
 		return V.T
 
 	@staticmethod

@@ -64,7 +64,7 @@ def test_DDM_2():
     V1 = Se.Sequencer.doubleDescriptionMethod(A,minimise= False)
     V2 = Se.Sequencer.doubleDescriptionMethod(A,minimise= True)
     #print(V1)
-    assert np.allclose(V1,B1) #the arrays are not 100% equal because of floit point aritmetic
+    assert sameProducers(V1,B1) #the arrays are not 100% equal because of floit point aritmetic
 
 def test_DDM_3():
     A = np.array([[-1,0,0,1],[-1,0,-1,2],[0,-1,0,1],[0,-1,-1,2],[1,1,-1,-4],[1,1,0,-5],[0,0,0,-1]])
@@ -86,9 +86,25 @@ def test_Sequencer_Cube():
     assert np.array_equal(V,[[1,-1,1,-1,1,-1,1,-1],[-1,-1,1,1,-1,-1,1,1],[-1,-1,-1,-1,1,1,1,1]])
 
 def test_Sequencer_Homework():
-    filepath = 'tests/homework.poly'
-    seq = Se.Sequencer(filepath)
-    V, W = seq.run()
+    pass
+    #filepath = 'tests/homework.poly'
+    #seq = Se.Sequencer(filepath)
+    #V, W = seq.run()
     #assert np.array_equal(seq.M, [])
-    #assert np.array_equal(V,[[0,2],[1,0],[0,0]])
-    #assert np.array_equal(W,[[1,15,0,4,0,2],[7,0,2,0,1,0],[5,5,1,1,0,0]])
+    #assert sameProducers(V,np.array([[0,2],[1,0],[0,0]]))
+    #assert sameProducers(W,np.array([[1,15,0,4,0,2],[7,0,2,0,1,0],[5,5,1,1,0,0]]))
+
+def test_Sequencer_Crosspolytope():
+    seq = Se.Sequencer("tests/crosspolytope.poly")
+    V,W = seq.run()
+    B1 = np.eye(4)
+    B2 = -np.eye(4)
+    B = np.concatenate((B1,B2), axis=1)
+    assert W.size == 0
+    assert sameProducers(V, B)
+
+def test_Sequencer_Cubactahedron():
+    seq = Se.Sequencer("tests/cuboctahedron.poly")
+    V,W = seq.run()
+    assert W.size == 0
+    assert V.shape == (3,12)
